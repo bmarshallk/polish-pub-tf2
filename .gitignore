@@ -15,6 +15,7 @@ psf/
 *.txt
 *.png
 *.index
+.ckpt/dsa-example-model/checkpoint
 
 # C extensions
 *.so
