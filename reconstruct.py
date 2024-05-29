@@ -3,7 +3,7 @@ import sys
 
 import optparse
 import matplotlib.pylab as plt
-
+import numpy as np
 from model import resolve_single
 from utils import load_image, plot_sample
 from model.wdsr import wdsr_b
