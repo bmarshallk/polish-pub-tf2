@@ -19,64 +19,81 @@ try:
 except:
     print("Could not load astropy.io.fits")
 
+
 def readfits(fnfits):
-    """ Read in fits file using astropy.io.fits 
     """
+    Read in fits file using astropy.io.fits
+    """
+
+    # Open the FITS file
     hdulist = fits.open(fnfits)
+
+    # Get the shape of the data in the first HDU
     dshape = hdulist[0].shape 
-    if len(dshape)==2:
+
+    # Depending on the shape of the data, extract the data accordingly
+    if len(dshape) == 2:
+        # If the data is 2D, just take it as is
         data = hdulist[0].data
-    elif len(dshape)==3:
+    elif len(dshape) == 3:
+        # If the data is 3D, take the first slice
         data = hdulist[0].data[0]
-    elif len(dshape)==4:
-        data = hdulist[0].data[0,0]
+    elif len(dshape) == 4:
+        # If the data is 4D, take the first slice of the first slice
+        data = hdulist[0].data[0, 0]
+
+    # Extract the header from the first HDU
     header = hdulist[0].header
+
+    # Extract the pixel scale and number of pixels from the header
     pixel_scale = abs(header['CDELT1'])
     num_pix = abs(header['NAXIS1'])
+
+    # Return the data, header, pixel scale, and number of pixels
     return data, header, pixel_scale, num_pix
 
 
-def gaussian2D( coords,  # x and y coordinates for each image.
-                amplitude=1,  # Highest intensity in image.
-                xo=0,  # x-coordinate of peak centre.
-                yo=0,  # y-coordinate of peak centre.
-                sigma_x=1,  # Standard deviation in x.
-                sigma_y=1,  # Standard deviation in y.
-                rho=0,  # Correlation coefficient.
-                offset=0,
-                rot=0):  # rotation in degrees.
-    """ 2D ellipsoidal Gaussian function, including 
-    rotation
+def gaussian2D(coords, amplitude=1, xo=0, yo=0, sigma_x=1, sigma_y=1, rho=0, offset=0, rot=0):
     """
+    2D ellipsoidal Gaussian function, including rotation.
+    """
+    # Extract x and y coordinates
     x, y = coords
 
+    # Convert rotation angle from degrees to radians
     rot = np.deg2rad(rot)
 
-    x_ = np.cos(rot)*x - y*np.sin(rot)
-    y_ = np.sin(rot)*x + np.cos(rot)*y
+    # Rotate x and y coordinates
+    x_rot = np.cos(rot) * x - y * np.sin(rot)
+    y_rot = np.sin(rot) * x + np.cos(rot) * y
 
+    # Convert peak center coordinates to float
     xo = float(xo)
     yo = float(yo)
 
-    xo_ = np.cos(rot)*xo - yo*np.sin(rot) 
-    yo_ = np.sin(rot)*xo + np.cos(rot)*yo
+    # Rotate peak center coordinates
+    xo_rot = np.cos(rot) * xo - yo * np.sin(rot)
+    yo_rot = np.sin(rot) * xo + np.cos(rot) * yo
 
-    x,y,xo,yo = x_,y_,xo_,yo_
+    # Update coordinates and peak center with rotated values
+    x, y, xo, yo = x_rot, y_rot, xo_rot, yo_rot
 
     # Create covariance matrix
-    mat_cov = [[sigma_x**2, rho * sigma_x * sigma_y],
-               [rho * sigma_x * sigma_y, sigma_y**2]]
-    mat_cov = np.asarray(mat_cov)
-    # Find its inverse
+    mat_cov = np.array([[sigma_x**2, rho * sigma_x * sigma_y],
+                        [rho * sigma_x * sigma_y, sigma_y**2]])
+
+    # Calculate inverse of covariance matrix
     mat_cov_inv = np.linalg.inv(mat_cov)
 
-    # PB We stack the coordinates along the last axis
+    # Stack the coordinates along the last axis
     mat_coords = np.stack((x - xo, y - yo), axis=-1)
 
-    G = amplitude * np.exp(-0.5*np.matmul(np.matmul(mat_coords[:, :, np.newaxis, :],
-                                                    mat_cov_inv),
-                                          mat_coords[..., np.newaxis])) + offset
+    # Calculate Gaussian distribution
+    G = amplitude * np.exp(-0.5 * np.einsum('...i,ij,...j', mat_coords, mat_cov_inv, mat_coords)) + offset
+
+    # Remove single-dimensional entries from the shape of the array
     return G.squeeze()
+
 
 def normalize_data(data, nbit=16):
     """ Normalize data to fit in bit range, 
